@@ -381,6 +381,7 @@ export default function LiveTV() {
         <div className="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {groups.map((group) => (
             <button
+              data-focusable data-nav-section="livetv-categories"
               key={group}
               onClick={() => setSelectedGroup(group)}
               className={`rounded-full px-5 py-2 text-xs font-bold transition whitespace-nowrap ${
@@ -433,6 +434,7 @@ export default function LiveTV() {
               {/* Player Top Controls */}
               <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
                 <button
+                  data-focusable data-nav-section="livetv-categories"
                   onClick={toggleFullscreen}
                   className="rounded-full bg-black/60 p-2 text-white hover:bg-black transition"
                   title="Fullscreen"
@@ -468,6 +470,7 @@ export default function LiveTV() {
 
                 <div className="flex items-center gap-2">
                   <button
+                    data-focusable data-nav-section="livetv-channels"
                     onClick={handlePrevChannel}
                     disabled={currentIndex <= 0}
                     className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition"
@@ -476,6 +479,7 @@ export default function LiveTV() {
                     <ChevronLeftIcon className="h-5 w-5" />
                   </button>
                   <button
+                    data-focusable data-nav-section="livetv-channels"
                     onClick={handleNextChannel}
                     disabled={currentIndex >= filteredChannels.length - 1}
                     className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition"
@@ -495,6 +499,7 @@ export default function LiveTV() {
                 Channels ({filteredChannels.length})
               </h3>
               <button
+                data-focusable data-nav-section="livetv-categories"
                 onClick={() => {
                   setLoading(true);
                   Promise.allSettled(CATEGORY_PLAYLISTS.map((url) => fetch(url).then((res) => res.text()))).then((results) => {
@@ -524,6 +529,7 @@ export default function LiveTV() {
                   const isActive = currentChannel?.id === ch.id;
                   return (
                     <button
+                      data-focusable data-nav-section="livetv-channels"
                       key={ch.id}
                       onClick={() => setCurrentChannel(ch)}
                       className={`flex items-center gap-3 rounded-xl p-2.5 text-left text-xs font-semibold transition ${

@@ -168,6 +168,7 @@ const Watch = () => {
       >
         <div className="flex items-center gap-4">
           <button
+            data-focusable data-nav-section="watch-controls"
             onClick={() => navigate(-1)}
             aria-label="Back"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition hover:bg-white/20 hover:scale-105"
@@ -187,6 +188,7 @@ const Watch = () => {
         <div className="flex items-center gap-3">
           {type === 'tv' && (
             <button
+              data-focusable data-nav-section="watch-controls"
               onClick={() => setShowEpisodesDrawer((prev) => !prev)}
               className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition backdrop-blur-md ${
                 showEpisodesDrawer
@@ -199,6 +201,7 @@ const Watch = () => {
             </button>
           )}
           <button
+            data-focusable data-nav-section="watch-controls"
             onClick={toggleFullscreen}
             aria-label="Toggle Fullscreen"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition hover:bg-white/20 hover:scale-105"
@@ -222,6 +225,7 @@ const Watch = () => {
             </div>
             {validSeasons.length > 0 && (
               <select
+                data-focusable data-nav-section="watch-episodes"
                 value={selectedSeason}
                 onChange={(e) => {
                   setSelectedSeason(Number(e.target.value));
@@ -241,6 +245,7 @@ const Watch = () => {
           <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1.5 scrollbar-thin">
             {Array.from({ length: episodeCount }, (_, i) => i + 1).map((epNum) => (
               <button
+                data-focusable data-nav-section="watch-episodes"
                 key={epNum}
                 onClick={() => {
                   setSelectedEpisode(epNum);
@@ -275,6 +280,7 @@ const Watch = () => {
 
           {hasNextEpisode && (
             <button
+              data-focusable data-nav-section="watch-controls"
               onClick={handleNextEpisode}
               className="flex items-center gap-2 rounded-full bg-white px-5 py-2 text-xs font-black text-black transition hover:bg-white/80 shadow-lg"
             >

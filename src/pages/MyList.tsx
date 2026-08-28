@@ -23,7 +23,7 @@ const MyList = () => {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8">
           {list.map((movie) => (
             <div key={movie.id} className="group relative overflow-hidden rounded-xl bg-[#181818] text-left ring-1 ring-white/10">
-              <button onClick={() => setSelectedMovie(movie)} className="w-full">
+              <button data-focusable data-nav-section="mylist-grid" onClick={() => setSelectedMovie(movie)} className="w-full">
                 <img
                   src={`${IMAGE_BASE_URL}/w500${movie.poster_path}`}
                   alt={movie.title || movie.name || ''}
@@ -31,10 +31,11 @@ const MyList = () => {
                 />
               </button>
               <div className="p-3 flex items-center justify-between gap-2">
-                <button onClick={() => setSelectedMovie(movie)} className="line-clamp-1 text-xs font-semibold text-white hover:text-red-500 transition text-left">
+                <button data-focusable data-nav-section="mylist-grid" onClick={() => setSelectedMovie(movie)} className="line-clamp-1 text-xs font-semibold text-white hover:text-red-500 transition text-left">
                   {movie.title || movie.name}
                 </button>
                 <button
+                  data-focusable data-nav-section="mylist-grid"
                   onClick={() => {
                     const updated = list.filter((item) => item.id !== movie.id);
                     localStorage.setItem('streamflix_my_list', JSON.stringify(updated));

@@ -96,6 +96,7 @@ const MovieRow = ({ title, endpoint, onMovieClick }: MovieRowProps) => {
       <div className="relative">
         {showLeft && (
           <button
+            data-focusable data-nav-section={`row-${endpoint}`}
             onClick={() => scroll('left')}
             aria-label={`Scroll ${title} left`}
             className="absolute left-0 top-0 z-20 hidden h-full w-12 items-center justify-center bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80 md:flex"
@@ -105,6 +106,7 @@ const MovieRow = ({ title, endpoint, onMovieClick }: MovieRowProps) => {
         )}
         {showRight && (
           <button
+            data-focusable data-nav-section={`row-${endpoint}`}
             onClick={() => scroll('right')}
             aria-label={`Scroll ${title} right`}
             className="absolute right-0 top-0 z-20 hidden h-full w-12 items-center justify-center bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80 md:flex"
@@ -120,6 +122,8 @@ const MovieRow = ({ title, endpoint, onMovieClick }: MovieRowProps) => {
           {movies.map((movie) => (
             <button
               key={movie.id}
+              data-focusable
+              data-nav-section={`row-${endpoint}`}
               onClick={() => onMovieClick?.(movie)}
               className="group relative w-[145px] shrink-0 overflow-hidden rounded-xl bg-[#181818] text-left ring-1 ring-white/10 md:w-[180px]"
             >

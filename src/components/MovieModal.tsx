@@ -2,6 +2,7 @@ import axios from 'axios';
 import { XMarkIcon, PlayIcon, TvIcon, FilmIcon, PlusIcon, CheckIcon, HandThumbUpIcon } from '@heroicons/react/24/solid';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useSpatialNav } from '../hooks/useSpatialNav';
 import { BASE_URL, Movie, TMDB_API_KEY, TvEpisode, TvSeason } from '../services/api.config';
 import { getImageUrl } from '../services/movieService';
 import { isInMyList, isLiked, toggleLike, toggleMyList } from '../services/myListService';
@@ -20,6 +21,12 @@ function formatRuntime(minutes?: number): string {
 }
 
 const MovieModal = ({ movie, onClose }: MovieModalProps) => {
+  const { setCloseOverlay } = useSpatialNav();
+  useEffect(() => {
+    setCloseOverlay(() => onClose);
+    return () => setCloseOverlay(() => {});
+  }, [setCloseOverlay, onClose]);
+
   const [activeMovie, setActiveMovie] = useState<Movie>(movie);
 
   useEffect(() => {
@@ -127,6 +134,7 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#181818] via-black/20 to-transparent" />
           <button
+            data-focusable data-nav-section="modal"
             onClick={onClose}
             className="absolute right-4 top-4 rounded-full bg-black/70 p-2 text-white hover:bg-black transition"
             aria-label="Close"
@@ -173,6 +181,7 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
           {/* Action Buttons in a single horizontal row */}
           <div className="flex flex-wrap items-center gap-3 pt-1">
             <Link
+              data-focusable data-nav-section="modal-actions"
               to={
                 type === 'tv'
                   ? `/watch/tv/${activeMovie.id}?season=${selectedSeason}&episode=1`
@@ -185,6 +194,7 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
               Play {type === 'tv' ? 'Show' : 'Movie'}
             </Link>
             <Link
+              data-focusable data-nav-section="modal-actions"
               to={`/watch/${type}/${activeMovie.id}?mode=trailer`}
               onClick={onClose}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-6 py-3.5 font-bold text-white transition hover:bg-white/20"
@@ -192,6 +202,7 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
               Watch Trailer
             </Link>
             <button
+              data-focusable data-nav-section="modal-actions"
               onClick={handleToggleList}
               className={`inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 font-bold text-white transition ${
                 inList ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-white/15 hover:bg-white/25'
@@ -201,6 +212,7 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
               {inList ? 'In My List' : 'Add to List'}
             </button>
             <button
+              data-focusable data-nav-section="modal-actions"
               onClick={handleToggleLike}
               className={`inline-flex items-center justify-center rounded-full p-3.5 font-bold transition ${
                 liked ? 'bg-red-600 text-white' : 'bg-white/15 text-white/80 hover:bg-white/25'
@@ -247,6 +259,7 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
 
               {seasons.length > 0 && (
                 <select
+                  data-focusable data-nav-section="modal-episodes"
                   value={selectedSeason}
                   onChange={(e) => setSelectedSeason(Number(e.target.value))}
                   className="rounded-full border border-white/20 bg-[#222] px-4 py-2 text-sm font-bold text-white focus:border-red-500 focus:outline-none cursor-pointer"
@@ -268,6 +281,7 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
               <div className="flex flex-col gap-4 max-h-[480px] overflow-y-auto pr-2 scrollbar-thin">
                 {episodes.map((ep) => (
                   <Link
+                    data-focusable data-nav-section="modal-episodes"
                     key={ep.id || ep.episode_number}
                     to={`/watch/tv/${activeMovie.id}?season=${selectedSeason}&episode=${ep.episode_number}`}
                     onClick={onClose}
@@ -327,6 +341,7 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-6">
               {similarMovies.map((sim) => (
                 <button
+                  data-focusable data-nav-section="modal-similar"
                   key={sim.id}
                   onClick={() => setActiveMovie(sim)}
                   className="group relative overflow-hidden rounded-xl bg-[#222] text-left transition hover:scale-105"

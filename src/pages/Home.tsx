@@ -117,6 +117,7 @@ export default function Home() {
 
           {/* Side Nav Arrows */}
           <button
+            data-focusable data-nav-section="hero"
             onClick={handlePrevSlide}
             aria-label="Previous Featured Movie"
             className="absolute left-4 top-1/2 z-20 hidden -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-md transition hover:bg-black/80 group-hover:flex"
@@ -124,6 +125,7 @@ export default function Home() {
             <ChevronLeftIcon className="h-6 w-6" />
           </button>
           <button
+            data-focusable data-nav-section="hero"
             onClick={handleNextSlide}
             aria-label="Next Featured Movie"
             className="absolute right-4 top-1/2 z-20 hidden -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-md transition hover:bg-black/80 group-hover:flex"
@@ -150,18 +152,21 @@ export default function Home() {
               </p>
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <Link
+                  data-focusable data-nav-section="hero"
                   to={`/watch/${heroMovie.name && !heroMovie.title ? 'tv' : 'movie'}/${heroMovie.id}`}
                   className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 font-bold text-black shadow-xl transition hover:bg-white/80"
                 >
                   <PlayIcon className="h-5 w-5" /> Play
                 </Link>
                 <button
+                  data-focusable data-nav-section="hero"
                   onClick={() => setSelectedMovie(heroMovie)}
                   className="inline-flex items-center gap-2 rounded-full bg-white/20 px-6 py-3.5 font-bold backdrop-blur transition hover:bg-white/30"
                 >
                   <InformationCircleIcon className="h-5 w-5" /> More Info
                 </button>
                 <button
+                  data-focusable data-nav-section="hero"
                   onClick={handleHeroToggleList}
                   className={`inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-bold backdrop-blur transition ${
                     heroInList ? 'bg-emerald-600 text-white' : 'bg-white/20 text-white hover:bg-white/30'
@@ -171,6 +176,7 @@ export default function Home() {
                   {heroInList ? 'In My List' : 'My List'}
                 </button>
                 <button
+                  data-focusable data-nav-section="hero"
                   onClick={handleHeroToggleLike}
                   className={`inline-flex items-center rounded-full p-3.5 font-bold backdrop-blur transition ${
                     heroLiked ? 'bg-red-600 text-white' : 'bg-white/20 text-white hover:bg-white/30'
@@ -187,6 +193,7 @@ export default function Home() {
           <div className="absolute bottom-6 right-6 z-20 flex items-center gap-2">
             {heroMovies.map((m, idx) => (
               <button
+                data-focusable data-nav-section="hero"
                 key={m.id}
                 onClick={() => changeSlide(idx)}
                 aria-label={`Jump to slide ${idx + 1}`}

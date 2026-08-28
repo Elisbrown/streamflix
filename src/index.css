@@ -7,3 +7,40 @@
 html, body, #root { min-height: 100%; margin: 0; }
 body { background: #141414; }
 button, input { font: inherit; }
+
+/* TV Focus Ring System */
+[data-focusable] {
+  outline: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, outline 0.2s ease;
+}
+
+[data-focusable]:focus-visible,
+[data-focused="true"] {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.9), 0 0 0 6px rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+  z-index: 50;
+}
+
+/* Movie card hover overlay triggered by focus */
+[data-focused="true"] .group-hover\:opacity-100,
+[data-focused="true"] .group-hover\:translate-y-0,
+[data-focused="true"] .group-hover\:scale-105,
+[data-focused="true"] .group-hover\:text-red-500 {
+  opacity: 100 !important;
+  transform: translateY(0) scale(1.05) !important;
+  color: rgb(239, 68, 68) !important;
+}
+
+/* Ensure focus overlay visibility on cards */
+[data-focused="true"] > img + .absolute,
+[data-focused="true"] .absolute.inset-0.bg-gradient-to-t,
+[data-focused="true"] .absolute.inset-x-0.bottom-0 {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+/* Hide default browser outline for focusable elements */
+[data-focusable]:focus {
+  outline: none;
+}
