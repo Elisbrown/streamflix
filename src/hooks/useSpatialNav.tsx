@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+type Direction = 'left' | 'right' | 'up' | 'down';
 
 interface SpatialNavContextValue {
   focusedSection: string | null;
@@ -9,7 +12,7 @@ interface SpatialNavContextValue {
   setCloseOverlay: (cb: () => void) => void;
 }
 
-const SpatialNavContext = createContext<SpatialNavContextValue>({
+const SpatialNavContext = React.createContext<SpatialNavContextValue>({
   focusedSection: null,
   registerSection: () => {},
   registerElement: () => () => {},
@@ -18,186 +21,287 @@ const SpatialNavContext = createContext<SpatialNavContextValue>({
 });
 
 interface FocusMemory {
-  [section: string]: number;
+  [key: string]: string;
 }
 
-export function SpatialNavProvider({ children, closeOverlay }: { children: React.ReactNode; closeOverlay?: () => void }) {
-  const [focusedSection, setFocusedSection] = useState<string | null>(null);
+/*
+ * webOS TV 6 navigation layer.
+ *
+ * The previous implementation kept multiple elements marked data-focused="true"
+ * and searched the whole DOM for the first one. After React route changes that
+ * stale element could remain detached/hidden, making the remote appear dead.
+ *
+ * This implementation has exactly one focused element at a time and computes
+ * spatial neighbours from the elements currently rendered on screen.
+ */
+export function SpatialNavProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [focusedSection, setFocusedSection] = useState<string | null>(null);
   const memoryRef = useRef<FocusMemory>({});
-  const overlayRef = useRef<(() => void) | undefined>(closeOverlay);
-  const sectionsRef = useRef<Set<string>>(new Set());
-  const elementsRef = useRef<Map<string, HTMLElement[]>>(new Map());
+  const closeOverlayRef = useRef<(() => void) | null>(null);
+  const lastRouteRef = useRef(location.key);
+  const focusRequestRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    overlayRef.current = closeOverlay;
-  }, [closeOverlay]);
+  const registerSection = useCallback((_section: string) => {}, []);
 
-  const registerSection = useCallback((section: string) => {
-    sectionsRef.current.add(section);
-  }, []);
-
-  const registerElement = useCallback((el: HTMLElement, section: string) => {
-    if (!elementsRef.current.has(section)) elementsRef.current.set(section, []);
-    const arr = elementsRef.current.get(section)!;
-    arr.push(el);
-    // Sort by DOM order roughly
-    arr.sort((a, b) => {
-      const pos = a.compareDocumentPosition(b);
-      return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-    });
-    return () => {
-      const arr2 = elementsRef.current.get(section);
-      if (arr2) {
-        const idx = arr2.indexOf(el);
-        if (idx > -1) arr2.splice(idx, 1);
-      }
-    };
+  const registerElement = useCallback((_el: HTMLElement, _section: string) => {
+    return () => {};
   }, []);
 
   const setCloseOverlay = useCallback((cb: () => void) => {
-    overlayRef.current = cb;
+    closeOverlayRef.current = cb;
   }, []);
 
-  const getFocusablesInSection = useCallback((section: string): HTMLElement[] => {
-    const arr = elementsRef.current.get(section) || [];
-    return arr.filter((el) => {
-      if (!document.body.contains(el)) return false;
-      return true;
+  const isVisible = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    return (
+      document.body.contains(el) &&
+      !el.hasAttribute('disabled') &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      Number(style.opacity || 1) > 0 &&
+      r.width > 0 &&
+      r.height > 0
+    );
+  };
+
+  const getFocusables = useCallback((): HTMLElement[] => {
+    return Array.from(document.querySelectorAll<HTMLElement>('[data-focusable]'))
+      .filter(isVisible);
+  }, []);
+
+  const setFocus = useCallback((el: HTMLElement | null, scroll = true) => {
+    if (!el || !isVisible(el)) return false;
+
+    document.querySelectorAll<HTMLElement>('[data-focused="true"]').forEach((node) => {
+      node.removeAttribute('data-focused');
     });
+
+    el.setAttribute('data-focused', 'true');
+    try {
+      el.focus({ preventScroll: true });
+    } catch {
+      el.focus();
+    }
+
+    const section = el.getAttribute('data-nav-section');
+    if (section) {
+      setFocusedSection(section);
+      memoryRef.current[section] = el.getAttribute('data-nav-id') || '';
+    }
+
+    if (scroll) {
+      try {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      } catch {
+        el.scrollIntoView();
+      }
+    }
+
+    return true;
   }, []);
 
-  const getAllSections = useCallback((): string[] => {
-    return Array.from(sectionsRef.current);
+  const currentElement = useCallback(() => {
+    const marked = document.querySelector<HTMLElement>('[data-focused="true"]');
+    if (marked && isVisible(marked)) return marked;
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active.matches?.('[data-focusable]') && isVisible(active)) return active;
+    return null;
   }, []);
 
-  const getNearest = useCallback(
-    (fromEl: HTMLElement, direction: 'left' | 'right' | 'up' | 'down', section?: string) => {
-      const rect = fromEl.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
+  const chooseNearest = useCallback((from: HTMLElement, direction: Direction) => {
+    const fr = from.getBoundingClientRect();
+    const fx = fr.left + fr.width / 2;
+    const fy = fr.top + fr.height / 2;
+    const candidates = getFocusables().filter((el) => el !== from);
 
-      const candidates: HTMLElement[] = [];
-      if (section) {
-        candidates.push(...getFocusablesInSection(section));
-      } else {
-        getAllSections().forEach((s) => candidates.push(...getFocusablesInSection(s)));
+    let best: HTMLElement | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (const el of candidates) {
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      const dx = x - fx;
+      const dy = y - fy;
+
+      if (direction === 'left' && dx >= -2) continue;
+      if (direction === 'right' && dx <= 2) continue;
+      if (direction === 'up' && dy >= -2) continue;
+      if (direction === 'down' && dy <= 2) continue;
+
+      const primary = direction === 'left' || direction === 'right' ? Math.abs(dx) : Math.abs(dy);
+      const secondary = direction === 'left' || direction === 'right' ? Math.abs(dy) : Math.abs(dx);
+
+      // Strongly prefer elements on the same visual row/column. This prevents
+      // a navbar button from stealing focus from a nearby movie card.
+      const score = primary + secondary * 2.5;
+
+      if (score < bestScore) {
+        bestScore = score;
+        best = el;
       }
+    }
 
-      let best: HTMLElement | null = null;
-      let bestScore = Infinity;
+    return best;
+  }, [getFocusables]);
 
-      for (const el of candidates) {
-        if (el === fromEl) continue;
-        const r = el.getBoundingClientRect();
-        const ecx = r.left + r.width / 2;
-        const ecy = r.top + r.height / 2;
+  const moveFocus = useCallback((direction: Direction) => {
+    const from = currentElement();
+    if (!from) {
+      const first = getFocusables()[0];
+      if (first) setFocus(first);
+      return;
+    }
 
-        let dx = ecx - cx;
-        let dy = ecy - cy;
+    const target = chooseNearest(from, direction);
+    if (target) {
+      setFocus(target);
+      return;
+    }
 
-        if (direction === 'left' && dx >= -10) continue; // must be to left
-        if (direction === 'right' && dx <= 10) continue;
-        if (direction === 'up' && dy >= -10) continue;
-        if (direction === 'down' && dy <= 10) continue;
-
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const angleScore = Math.abs(Math.atan2(dy, dx) - {
-          left: Math.PI, right: 0, up: -Math.PI / 2, down: Math.PI / 2
-        }[direction]);
-        const score = dist + angleScore * 50; // prioritize direction alignment
-
-        if (score < bestScore) {
-          bestScore = score;
-          best = el;
-        }
+    // At the top of a page, ↑ moves to the navbar.
+    if (direction === 'up') {
+      const nav = getFocusables().filter((el) => el.getAttribute('data-nav-section') === 'navbar');
+      if (nav.length) {
+        const fr = from.getBoundingClientRect();
+        const fx = fr.left + fr.width / 2;
+        const nearest = nav.reduce((a, b) => {
+          const ax = Math.abs(a.getBoundingClientRect().left + a.getBoundingClientRect().width / 2 - fx);
+          const bx = Math.abs(b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2 - fx);
+          return ax <= bx ? a : b;
+        });
+        setFocus(nearest);
       }
-      return best;
-    },
-    [getFocusablesInSection, getAllSections]
-  );
+    }
+  }, [chooseNearest, currentElement, getFocusables, setFocus]);
 
-  const moveFocus = useCallback(
-    (direction: 'left' | 'right' | 'up' | 'down', currentSection?: string) => {
-      const currentSectionVal = currentSection || focusedSection;
-      const activeEl = document.querySelector('[data-focused="true"]') as HTMLElement | null;
-      const startEl = activeEl || document.activeElement as HTMLElement | null;
-      if (!startEl) return;
+  const handleBack = useCallback(() => {
+    if (closeOverlayRef.current) {
+      const close = closeOverlayRef.current;
+      closeOverlayRef.current = null;
+      close();
+      return;
+    }
 
-      let target = getNearest(startEl, direction, currentSectionVal || undefined);
-      if (!target) {
-        // Try across all sections
-        target = getNearest(startEl, direction);
-      }
-      if (target) {
-        target.focus();
-        target.setAttribute('data-focused', 'true');
-        target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-        // Determine section of target
-        const sectionAttr = target.getAttribute('data-nav-section');
-        if (sectionAttr) {
-          setFocusedSection(sectionAttr);
-          const arr = getFocusablesInSection(sectionAttr);
-          const idx = arr.indexOf(target);
-          if (idx > -1) memoryRef.current[sectionAttr] = idx;
-        } else if (currentSectionVal) {
-          setFocusedSection(currentSectionVal);
-        }
-      }
-    },
-    [focusedSection, getNearest, getFocusablesInSection]
-  );
+    if (location.pathname !== '/' || window.history.length > 1) {
+      navigate(-1);
+    }
+  }, [location.pathname, navigate]);
+
+  // Magic Remote pointer support: when the LG pointer hovers a focusable
+  // element, make that element the single logical focus target too. This keeps
+  // pointer and 5-way navigation in the same focus model.
+  useEffect(() => {
+    const onPointerOver = (event: MouseEvent) => {
+      const target = (event.target as HTMLElement | null)?.closest?.('[data-focusable]') as HTMLElement | null;
+      if (target && isVisible(target)) setFocus(target, false);
+    };
+    const onPointerDown = (event: MouseEvent) => {
+      const target = (event.target as HTMLElement | null)?.closest?.('[data-focusable]') as HTMLElement | null;
+      if (target && isVisible(target)) setFocus(target, false);
+    };
+    document.addEventListener('mouseover', onPointerOver, true);
+    document.addEventListener('mousedown', onPointerDown, true);
+    return () => {
+      document.removeEventListener('mouseover', onPointerOver, true);
+      document.removeEventListener('mousedown', onPointerDown, true);
+    };
+  }, [setFocus]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const focused = document.querySelector('[data-focused="true"]') as HTMLElement | null;
-      const activeEl = focused || document.activeElement;
-      const sectionAttr = activeEl?.getAttribute('data-nav-section') || focused?.getAttribute('data-nav-section');
-      const currentSection = sectionAttr || focusedSection || null;
+    const keyCodes: Record<number, string> = {
+      37: 'ArrowLeft',
+      38: 'ArrowUp',
+      39: 'ArrowRight',
+      40: 'ArrowDown',
+      13: 'Enter',
+      461: 'Back',
+      10009: 'Back',
+      8: 'Back',
+      27: 'Back',
+      10082: 'Exit',
+      10252: 'MediaPlayPause',
+    };
 
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        moveFocus('up', currentSection || undefined);
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        moveFocus('down', currentSection || undefined);
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        moveFocus('left', currentSection || undefined);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        moveFocus('right', currentSection || undefined);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (focused) {
-          focused.click();
-        } else if (activeEl && (activeEl as HTMLElement).click) {
-          (activeEl as HTMLElement).click();
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = keyCodes[event.keyCode] || event.key;
+
+      // Never steal normal text editing keys from an input.
+      const target = event.target as HTMLElement | null;
+      const isTextInput =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.getAttribute('contenteditable') === 'true';
+
+      if (key === 'Back' || key === 'Exit') {
+        event.preventDefault();
+        event.stopPropagation();
+        handleBack();
+        return;
+      }
+
+      if (isTextInput && (key === 'ArrowLeft' || key === 'ArrowRight')) return;
+
+      if (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' || key === 'ArrowDown') {
+        event.preventDefault();
+        event.stopPropagation();
+        moveFocus(key.replace('Arrow', '').toLowerCase() as Direction);
+        return;
+      }
+
+      if (key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        const focused = currentElement();
+        if (!focused) return;
+
+        if (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA') {
+          const form = focused.closest('form') as HTMLFormElement | null;
+          if (form) {
+            const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+            form.dispatchEvent(submitEvent);
+          }
+          return;
         }
-      } else if (e.key === 'Backspace') {
-        // Try modal close first
-        if (overlayRef.current) {
-          overlayRef.current();
-        } else {
-          navigate(-1);
-        }
+
+        focused.click();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [moveFocus, focusedSection, navigate]);
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  }, [currentElement, handleBack, moveFocus]);
 
-  // Initialize focus on mount
+  // Every route/render gets a fresh, valid focus target. We restore by data-nav-id
+  // when possible; otherwise use the first visible target on that screen.
   useEffect(() => {
-    const first = document.querySelector('[data-focusable]') as HTMLElement | null;
-    if (first) {
-      first.setAttribute('data-focused', 'true');
-      first.focus({ preventScroll: true });
-      const sec = first.getAttribute('data-nav-section');
-      if (sec) setFocusedSection(sec);
-    }
-  }, []);
+    if (focusRequestRef.current) window.clearTimeout(focusRequestRef.current);
+
+    focusRequestRef.current = window.setTimeout(() => {
+      const focusables = getFocusables();
+      if (!focusables.length) return;
+
+      const saved = memoryRef.current[focusedSection || ''];
+      const remembered = saved
+        ? focusables.find((el) => el.getAttribute('data-nav-id') === saved)
+        : null;
+
+      const routeChanged = lastRouteRef.current !== location.key;
+      const candidate = remembered || (routeChanged
+        ? focusables.find((el) => el.getAttribute('data-nav-section') === 'navbar') || focusables[0]
+        : currentElement() || focusables[0]);
+
+      setFocus(candidate, false);
+      lastRouteRef.current = location.key;
+    }, 50);
+
+    return () => {
+      if (focusRequestRef.current) window.clearTimeout(focusRequestRef.current);
+    };
+  }, [location.pathname, location.search, getFocusables, setFocus, currentElement, focusedSection]);
 
   return (
     <SpatialNavContext.Provider
@@ -205,7 +309,7 @@ export function SpatialNavProvider({ children, closeOverlay }: { children: React
         focusedSection,
         registerSection,
         registerElement,
-        closeOverlay,
+        closeOverlay: closeOverlayRef.current || undefined,
         setCloseOverlay,
       }}
     >
@@ -215,5 +319,7 @@ export function SpatialNavProvider({ children, closeOverlay }: { children: React
 }
 
 export function useSpatialNav() {
-  return useContext(SpatialNavContext);
+  return React.useContext(SpatialNavContext);
 }
+
+import React from 'react';

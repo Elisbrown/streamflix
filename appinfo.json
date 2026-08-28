@@ -1,0 +1,15 @@
+{
+  "id": "com.streamflix.webos",
+  "version": "1.0.1",
+  "type": "web",
+  "main": "index.html",
+  "title": "Streamflix",
+  "appDescription": "Streamflix TV app for LG webOS",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "splashBackground": "splashBackground.png",
+  "vendor": "Maitre Soco",
+  "visible": true,
+  "removable": true,
+  "inspectable": true
+}
