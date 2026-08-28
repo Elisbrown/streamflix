@@ -1,0 +1,4 @@
+.nav-link { color: rgba(255,255,255,.7); transition: color .2s ease; }
+.nav-link:hover { color: #fff; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { scrollbar-width: none; }
