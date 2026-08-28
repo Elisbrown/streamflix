@@ -123,6 +123,7 @@ const MovieRow = ({ title, endpoint, onMovieClick }: MovieRowProps) => {
             <button
               key={movie.id}
               data-focusable
+              data-nav-id={`movie-${endpoint}-${movie.id}`}
               data-nav-section={`row-${endpoint}`}
               onClick={() => onMovieClick?.(movie)}
               className="group relative w-[145px] shrink-0 overflow-hidden rounded-xl bg-[#181818] text-left ring-1 ring-white/10 md:w-[180px]"

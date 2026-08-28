@@ -1,12 +1,13 @@
 {
   "name": "netflix-tmdb-authless",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "webos:build": "npm run build && node scripts/webos-package.js"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.1",

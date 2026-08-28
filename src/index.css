@@ -44,3 +44,23 @@ button, input { font: inherit; }
 [data-focusable]:focus {
   outline: none;
 }
+
+/* LG webOS 6 input hardening. Keep the existing Streamflix visual language;
+   only make keyboard/pointer focus deterministic. */
+html, body {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+[data-focusable] {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: pointer;
+}
