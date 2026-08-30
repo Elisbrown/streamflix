@@ -131,6 +131,7 @@ const MovieRow = ({ title, endpoint, onMovieClick }: MovieRowProps) => {
               <img
                 src={getImageUrl(movie.poster_path)}
                 alt={movie.title || movie.name || 'Movie'}
+                loading="lazy" decoding="async"
                 className="aspect-[2/3] w-full object-cover transition duration-300 group-hover:scale-105"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-0 transition group-hover:opacity-100" />

@@ -28,3 +28,16 @@ The router no longer imports or exposes authentication routes.
 ## Playback note
 
 The requested third-party full-movie source is not wired into this package. The player is a responsive iframe component and the watch page supplies an official YouTube trailer discovered through TMDB. This keeps the application functional without providing a mechanism for accessing potentially unauthorized copies of copyrighted films.
+
+## WebOS low-network runtime hardening
+
+- Added persistent API/data caching with stale-while-revalidate behavior.
+- Added in-flight request deduplication so repeated screens do not issue duplicate requests.
+- Added bounded localStorage cache retention for TV storage constraints.
+- Added retry/backoff for transient network errors and short request timeouts.
+- Added offline-aware fallback so cached catalog/details remain usable without connectivity.
+- Added adaptive TMDB image sizing for constrained connections and asynchronous image decoding.
+- Added opportunistic next-page prefetching for catalog rows.
+- Added an offline status indicator without changing the existing visual layout.
+- Updated webOS staging to include the referenced splash artwork and version 1.0.2.
+

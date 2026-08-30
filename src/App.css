@@ -2,3 +2,6 @@
 .nav-link:hover { color: #fff; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { scrollbar-width: none; }
+
+/* PWA install control is for install-capable browsers, not the dedicated webOS package. */
+@supports (-webkit-touch-callout: none) { .webos-install-control { display: none; } }

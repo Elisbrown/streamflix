@@ -1,4 +1,3 @@
-import axios from 'axios';
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
@@ -9,8 +8,10 @@ import {
 } from '@heroicons/react/24/solid';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import Player from '../components/Player/Player';
+import Player, { PlayerHandle } from '../components/Player/Player';
+import { getPlaybackCandidates } from '../services/playbackService';
 import { BASE_URL, Movie, TMDB_API_KEY, getMoviesApiUrl } from '../services/api.config';
+import { cachedGet } from '../services/networkCache';
 
 interface Video {
   key: string;
@@ -49,6 +50,10 @@ const Watch = () => {
   const [showEpisodesDrawer, setShowEpisodesDrawer] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const playerRef = useRef<PlayerHandle | null>(null);
+  const [playbackIndex, setPlaybackIndex] = useState(0);
+  const [playerPaused, setPlayerPaused] = useState(false);
+  const [playbackNotice, setPlaybackNotice] = useState('');
 
   useEffect(() => {
     const numericId = Number(id);
@@ -57,18 +62,36 @@ const Watch = () => {
       return;
     }
 
+    let cancelled = false;
     Promise.all([
-      axios.get(`${BASE_URL}/${type}/${numericId}`, { params: { api_key: TMDB_API_KEY } }),
-      axios.get(`${BASE_URL}/${type}/${numericId}/videos`, { params: { api_key: TMDB_API_KEY } }),
+      cachedGet<Movie>(
+        `details:${type}:${numericId}`,
+        `${BASE_URL}/${type}/${numericId}`,
+        { params: { api_key: TMDB_API_KEY } },
+        { ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 14 * 24 * 60 * 60 * 1000, timeoutMs: 10000, retries: 2 },
+      ),
+      cachedGet<{ results?: Video[] }>(
+        `videos:${type}:${numericId}`,
+        `${BASE_URL}/${type}/${numericId}/videos`,
+        { params: { api_key: TMDB_API_KEY } },
+        { ttlMs: 7 * 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, timeoutMs: 10000, retries: 1 },
+      ),
     ])
       .then(([details, videos]) => {
-        setMovie({ ...details.data, media_type: type });
-        const trailer = (videos.data.results as Video[] || [])
+        if (cancelled) return;
+        setMovie({ ...details, media_type: type });
+        const trailer = (videos.results || [])
           .filter((video) => video.site === 'YouTube' && video.type === 'Trailer')
           .sort((a, b) => Number(Boolean(b.official)) - Number(Boolean(a.official)))[0];
         setTrailerUrl(trailer ? `https://www.youtube.com/embed/${trailer.key}?autoplay=1&rel=0` : '');
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Unable to load this title.'));
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Unable to load this title.');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [id, type]);
 
   // Attempt automatic browser fullscreen when component mounts
@@ -97,6 +120,12 @@ const Watch = () => {
       document.exitFullscreen?.().catch(() => {});
     }
   };
+
+  useEffect(() => {
+    setPlaybackIndex(0);
+    setPlaybackNotice('');
+    setPlayerPaused(false);
+  }, [type, id, selectedSeason, selectedEpisode]);
 
   if (error) {
     return (
@@ -137,9 +166,41 @@ const Watch = () => {
     }
   };
 
-  const activeStreamUrl = isTrailerMode
-    ? trailerUrl
-    : getMoviesApiUrl(type, movie.id, selectedSeason, selectedEpisode);
+  const playbackCandidates = isTrailerMode
+    ? (trailerUrl ? [{ label: 'Trailer', url: trailerUrl }] : [])
+    : getPlaybackCandidates(type, movie.id, selectedSeason, selectedEpisode);
+  const activeStreamUrl = playbackCandidates[playbackIndex]?.url || playbackCandidates[0]?.url || '';
+
+  const handlePlayerEvent = (event: { event: string; currentTime?: number; duration?: number; paused?: boolean; message?: string; type?: string }) => {
+    const failureText = `${event.event || ''} ${event.message || ''} ${event.type || ''}`.toLowerCase();
+    if (event.event === 'pause') setPlayerPaused(true);
+    if (event.event === 'play') {
+      setPlayerPaused(false);
+      setPlaybackNotice('');
+    }
+    if (event.event === 'ended' && hasNextEpisode) handleNextEpisode();
+    if ((failureText.includes('all') && failureText.includes('failed')) || failureText.includes('network error')) {
+      if (playbackIndex + 1 < playbackCandidates.length) {
+        setPlaybackIndex((value) => value + 1);
+        setPlaybackNotice('Primary player failed. Trying the alternate player…');
+      } else {
+        setPlaybackNotice('No working stream was returned for this episode.');
+      }
+    }
+  };
+
+  const togglePlayback = () => {
+    playerRef.current?.togglePlay();
+  };
+
+  const tryAlternatePlayback = () => {
+    if (playbackIndex + 1 < playbackCandidates.length) {
+      setPlaybackIndex((value) => value + 1);
+      setPlaybackNotice('Trying the alternate player…');
+    } else {
+      setPlaybackNotice('The player could not find a working stream for this episode.');
+    }
+  };
 
   return (
     <div
@@ -150,15 +211,49 @@ const Watch = () => {
       {/* Fullscreen Video Player */}
       {activeStreamUrl ? (
         <Player
+          ref={playerRef}
           src={activeStreamUrl}
           title={`${title} ${type === 'tv' ? `S${selectedSeason} E${selectedEpisode}` : ''}`}
           className="h-full w-full"
+          onPlayerEvent={handlePlayerEvent}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-black px-6 text-center text-white/50">
           No video stream available for this title.
         </div>
       )}
+
+      {/* Parent-controlled playback controls. These avoid pointer presses on the
+          embedded player being used to trigger popup/top-navigation ad links. */}
+      <div
+        className={`absolute inset-x-0 bottom-0 z-30 flex items-center justify-center gap-3 p-6 bg-gradient-to-t from-black/95 via-black/50 to-transparent transition-opacity duration-300 ${
+          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <button
+          data-focusable data-nav-section="watch-player"
+          onClick={togglePlayback}
+          aria-label={playerPaused ? 'Play' : 'Pause'}
+          className="rounded-full bg-black/70 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/10 transition hover:bg-white/15"
+        >
+          {playerPaused ? 'Play' : 'Pause'}
+        </button>
+        {playbackCandidates.length > 1 && (
+          <button
+            data-focusable data-nav-section="watch-player"
+            onClick={tryAlternatePlayback}
+            aria-label="Try alternate player"
+            className="rounded-full bg-black/70 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/10 transition hover:bg-white/15"
+          >
+            Try alternate
+          </button>
+        )}
+        {playbackNotice && (
+          <div className="max-w-xl rounded-full bg-black/75 px-4 py-2 text-xs font-semibold text-white/80 ring-1 ring-white/10">
+            {playbackNotice}
+          </div>
+        )}
+      </div>
 
       {/* Top Overlay Bar */}
       <div

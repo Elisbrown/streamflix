@@ -1,5 +1,4 @@
-import React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 type Direction = 'left' | 'right' | 'up' | 'down';
@@ -12,7 +11,7 @@ interface SpatialNavContextValue {
   setCloseOverlay: (cb: () => void) => void;
 }
 
-const SpatialNavContext = React.createContext<SpatialNavContextValue>({
+const SpatialNavContext = createContext<SpatialNavContextValue>({
   focusedSection: null,
   registerSection: () => {},
   registerElement: () => () => {},
@@ -34,7 +33,7 @@ interface FocusMemory {
  * This implementation has exactly one focused element at a time and computes
  * spatial neighbours from the elements currently rendered on screen.
  */
-export function SpatialNavProvider({ children }: { children: React.ReactNode }) {
+export function SpatialNavProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [focusedSection, setFocusedSection] = useState<string | null>(null);
@@ -319,7 +318,6 @@ export function SpatialNavProvider({ children }: { children: React.ReactNode }) 
 }
 
 export function useSpatialNav() {
-  return React.useContext(SpatialNavContext);
+  return useContext(SpatialNavContext);
 }
 
-import React from 'react';

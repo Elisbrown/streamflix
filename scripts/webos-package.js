@@ -7,7 +7,7 @@ if (!fs.existsSync(dist)) throw new Error('dist/ does not exist. Run npm run bui
 
 const appinfo = {
   id: 'com.streamflix.webos',
-  version: '1.0.1',
+  version: '1.0.2',
   type: 'web',
   main: 'index.html',
   title: 'Streamflix',
@@ -21,7 +21,7 @@ const appinfo = {
 };
 
 fs.writeFileSync(path.join(dist, 'appinfo.json'), JSON.stringify(appinfo, null, 2));
-for (const file of ['icon.png', 'largeIcon.png']) {
+for (const file of ['icon.png', 'largeIcon.png', 'splashBackground.png']) {
   const source = path.join(root, file);
   if (fs.existsSync(source)) fs.copyFileSync(source, path.join(dist, file));
 }

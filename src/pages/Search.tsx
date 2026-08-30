@@ -1,8 +1,9 @@
-import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import MovieModal from '../components/MovieModal';
-import { BASE_URL, IMAGE_BASE_URL, Movie, TMDB_API_KEY } from '../services/api.config';
+import { BASE_URL, Movie, TMDB_API_KEY } from '../services/api.config';
+import { cachedGet } from '../services/networkCache';
+import { getImageUrl } from '../services/movieService';
 
 const Search = () => {
   const [params, setParams] = useSearchParams();
@@ -16,9 +17,25 @@ const Search = () => {
       setResults([]);
       return;
     }
-    axios.get(`${BASE_URL}/search/multi`, { params: { api_key: TMDB_API_KEY, query: q, include_adult: false } })
-      .then((response) => setResults((response.data.results || []).filter((item: Movie & { media_type?: string }) => item.media_type === 'movie' || item.media_type === 'tv')))
-      .catch(() => setResults([]));
+    let cancelled = false;
+    cachedGet<{ results?: Array<Movie & { media_type?: string }> }>(
+      `search:${q.toLowerCase()}`,
+      `${BASE_URL}/search/multi`,
+      { params: { api_key: TMDB_API_KEY, query: q, include_adult: false } },
+      { ttlMs: 12 * 60 * 60 * 1000, staleTtlMs: 7 * 24 * 60 * 60 * 1000, timeoutMs: 10000, retries: 1 },
+    )
+      .then((response) => {
+        if (cancelled) return;
+        setResults((response.results || []).filter(
+          (item) => item.media_type === 'movie' || item.media_type === 'tv',
+        ));
+      })
+      .catch(() => {
+        if (!cancelled) setResults([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [params]);
 
   const submit = (event: React.FormEvent) => {
@@ -38,7 +55,8 @@ const Search = () => {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8">
           {results.map((movie) => (
             <button data-focusable data-nav-section="search-results" key={`${movie.media_type}-${movie.id}`} onClick={() => setSelected(movie)} className="overflow-hidden rounded-xl bg-[#181818] text-left ring-1 ring-white/10">
-              <img src={`${IMAGE_BASE_URL}/w500${movie.poster_path}`} alt={movie.title || movie.name || ''} className="aspect-[2/3] w-full object-cover transition hover:scale-105" />
+              <img src={getImageUrl(movie.poster_path)} alt={movie.title || movie.name || ''} loading="lazy" decoding="async"
+                className="aspect-[2/3] w-full object-cover transition hover:scale-105" />
               <div className="p-3"><div className="line-clamp-2 text-xs font-semibold">{movie.title || movie.name}</div></div>
             </button>
           ))}

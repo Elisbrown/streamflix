@@ -64,3 +64,15 @@ input, textarea {
   user-select: none;
   cursor: pointer;
 }
+
+/* Performance-safe defaults for TV browsers and constrained devices. */
+@media (pointer: coarse) {
+  [data-focusable] { transition-duration: 120ms; }
+}
+html.webos-tv [data-focusable] { transition-duration: 110ms; }
+html.webos-tv .backdrop-blur,
+html.webos-tv .backdrop-blur-md,
+html.webos-tv .backdrop-blur-lg,
+html.webos-tv .backdrop-blur-xl { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+html.webos-tv .transition.duration-700 { transition-duration: 250ms !important; }
+html.webos-tv .animate-spin { animation-duration: 900ms !important; }

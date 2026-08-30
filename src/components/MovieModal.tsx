@@ -1,10 +1,10 @@
-import axios from 'axios';
 import { XMarkIcon, PlayIcon, TvIcon, FilmIcon, PlusIcon, CheckIcon, HandThumbUpIcon } from '@heroicons/react/24/solid';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSpatialNav } from '../hooks/useSpatialNav';
 import { BASE_URL, Movie, TMDB_API_KEY, TvEpisode, TvSeason } from '../services/api.config';
 import { getImageUrl } from '../services/movieService';
+import { cachedGet } from '../services/networkCache';
 import { isInMyList, isLiked, toggleLike, toggleMyList } from '../services/myListService';
 
 interface MovieModalProps {
@@ -67,26 +67,23 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
   useEffect(() => {
     let active = true;
 
-    axios
-      .get(`${BASE_URL}/${type}/${activeMovie.id}`, {
-        params: {
-          api_key: TMDB_API_KEY,
-          append_to_response: 'credits,similar,recommendations',
-        },
-      })
-      .then((res) => {
+    cachedGet<Movie>(
+      `modal-details:${type}:${activeMovie.id}`,
+      `${BASE_URL}/${type}/${activeMovie.id}`,
+      { params: { api_key: TMDB_API_KEY, append_to_response: 'credits,similar,recommendations' } },
+      { ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 14 * 24 * 60 * 60 * 1000, timeoutMs: 8000, retries: 2 },
+    )
+      .then((data) => {
         if (!active) return;
-        setDetails(res.data);
+        setDetails(data);
 
         if (type === 'tv') {
-          const validSeasons = (res.data.seasons as TvSeason[] || []).filter((s) => s.season_number > 0);
+          const validSeasons = (data.seasons as TvSeason[] || []).filter((s) => s.season_number > 0);
           setSeasons(validSeasons);
-          if (validSeasons.length > 0) {
-            setSelectedSeason(validSeasons[0].season_number);
-          }
+          if (validSeasons.length > 0) setSelectedSeason((current) => validSeasons.some((s) => s.season_number === current) ? current : validSeasons[0].season_number);
         }
 
-        const sim = res.data.similar?.results || res.data.recommendations?.results || [];
+        const sim = data.similar?.results || data.recommendations?.results || [];
         setSimilarMovies(sim.slice(0, 6));
       })
       .catch(() => {});
@@ -101,17 +98,15 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
     if (type !== 'tv' || !selectedSeason) return;
 
     setLoadingEpisodes(true);
-    axios
-      .get(`${BASE_URL}/tv/${activeMovie.id}/season/${selectedSeason}`, {
-        params: { api_key: TMDB_API_KEY },
-      })
-      .then((res) => {
-        setEpisodes(res.data.episodes || []);
-        setLoadingEpisodes(false);
-      })
-      .catch(() => {
-        setLoadingEpisodes(false);
-      });
+    cachedGet<{ episodes?: TvEpisode[] }>(
+      `episodes:${activeMovie.id}:${selectedSeason}`,
+      `${BASE_URL}/tv/${activeMovie.id}/season/${selectedSeason}`,
+      { params: { api_key: TMDB_API_KEY } },
+      { ttlMs: 24 * 60 * 60 * 1000, staleTtlMs: 30 * 24 * 60 * 60 * 1000, timeoutMs: 8000, retries: 2 },
+    )
+      .then((data) => setEpisodes(Array.isArray(data.episodes) ? data.episodes : []))
+      .catch(() => {})
+      .finally(() => setLoadingEpisodes(false));
   }, [activeMovie.id, selectedSeason, type]);
 
   const castNames = details?.credits?.cast?.slice(0, 5).map((c) => c.name).join(', ');

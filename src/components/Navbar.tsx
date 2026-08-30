@@ -1,6 +1,7 @@
 import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import InstallAppButton from './InstallAppButton';
 
 const navItems = [
   ['/', 'Home'],
@@ -37,6 +38,7 @@ export default function Navbar() {
             <MagnifyingGlassIcon className="ml-3 h-5 w-5 text-white/70" />
             <input aria-label="Search movies and shows" data-focusable data-nav-section="navbar" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search titles" className="w-44 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 lg:w-64" />
           </form>
+          <InstallAppButton />
           <button data-focusable data-nav-section="navbar" className="rounded-full p-2 hover:bg-white/10 sm:hidden" aria-label="Search" onClick={() => navigate('/search')}>
             <MagnifyingGlassIcon className="h-5 w-5" />
           </button>
