@@ -7,14 +7,14 @@ interface PlayerProps {
 /**
  * Simple embed player.
  *
- * Renders the streaming provider's iframe directly. A transparent overlay
- * sits on top of the iframe to block all clicks from reaching it, which
- * prevents the ad-overlay redirects the provider injects. Because the
- * overlay swallows every click, the user cannot interact with the player's
- * own controls; the embed URL is configured for autoplay so playback
- * starts on its own. The Referer header is intentionally NOT suppressed
- * (no `referrerPolicy="no-referrer"`), because the provider's player code
- * flags the embed as "sandboxed" when it cannot see the embedding origin.
+ * Renders the streaming provider's iframe directly without a `sandbox`
+ * attribute (the provider refuses to load inside a sandboxed frame).
+ * Popups and top-navigations triggered by the ad overlays inside the
+ * embed are instead blocked via the iframe's `csp` attribute, which
+ * applies a sandbox via Content Security Policy. That sandbox does NOT
+ * create a `sandbox` DOM attribute, so the provider's
+ * `hasAttribute('sandbox')` check passes, while the browser still
+ * blocks `window.open` and `top.location` navigations.
  */
 export default function Player({ src, title, className = '' }: PlayerProps) {
   return (
@@ -26,14 +26,10 @@ export default function Player({ src, title, className = '' }: PlayerProps) {
         className="absolute inset-0 h-full w-full border-0"
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
         allowFullScreen
-      />
-      {/* Transparent click-blocking layer.
-          Sits above the iframe so clicks are captured here instead of
-          reaching the ad overlays inside the embed. */}
-      <div
-        className="absolute inset-0 z-10 cursor-default"
-        style={{ background: 'transparent' }}
-        aria-hidden="true"
+        // Block popups / top-navigations from the ad layer without using
+        // the `sandbox` attribute (which the provider explicitly rejects).
+        // `csp` is supported since Chrome 76 (webOS 6 is Chromium 79).
+        csp="sandbox allow-scripts allow-same-origin allow-forms allow-presentation allow-pointer-lock allow-orientation-lock allow-downloads"
       />
     </div>
   );
