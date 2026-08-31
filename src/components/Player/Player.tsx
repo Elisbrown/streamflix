@@ -1,77 +1,39 @@
-import { usePlayerBridge } from '../../hooks/usePlayerBridge';
-import PlayerControls from './PlayerControls';
-
 interface PlayerProps {
-  mediaType: 'movie' | 'tv';
-  id: number | string;
+  src: string;
   title: string;
-  subtitle?: string;
-  season?: number;
-  episode?: number;
   className?: string;
-  showEpisodesButton?: boolean;
-  onEpisodesClick?: () => void;
-  onBack: () => void;
-  onDownload?: () => void;
-  getDownloadUrl?: () => string;
 }
 
 /**
- * Player
+ * Simple embed player.
  *
- * Renders the third-party embed iframe (no sandbox, no allowFullScreen so
- * our own fullscreen UI is the only fullscreen experience) and overlays
- * a custom controls layer that talks to the embedded player through
- * postMessage. All clicks on the video surface are captured by the
- * controls layer and forwarded as explicit play/pause/seek commands,
- * which prevents click leakage to ad overlays inside the iframe.
+ * Renders the streaming provider's iframe directly. A transparent overlay
+ * sits on top of the iframe to block all clicks from reaching it, which
+ * prevents the ad-overlay redirects the provider injects. Because the
+ * overlay swallows every click, the user cannot interact with the player's
+ * own controls; the embed URL is configured for autoplay so playback
+ * starts on its own. The Referer header is intentionally NOT suppressed
+ * (no `referrerPolicy="no-referrer"`), because the provider's player code
+ * flags the embed as "sandboxed" when it cannot see the embedding origin.
  */
-export default function Player({
-  mediaType,
-  id,
-  title,
-  subtitle,
-  season = 1,
-  episode = 1,
-  className = '',
-  showEpisodesButton,
-  onEpisodesClick,
-  onBack,
-  onDownload,
-  getDownloadUrl,
-}: PlayerProps) {
-  const { embedUrl, iframeRef, state, sources, send } = usePlayerBridge({
-    mediaType,
-    id,
-    season,
-    episode,
-  });
-
+export default function Player({ src, title, className = '' }: PlayerProps) {
   return (
     <div className={`relative h-full w-full overflow-hidden bg-black ${className}`}>
       <iframe
-        key={embedUrl}
-        ref={iframeRef}
-        data-player="streamflix"
-        src={embedUrl}
+        key={src}
+        src={src}
         title={title}
         className="absolute inset-0 h-full w-full border-0"
-        allow="autoplay; encrypted-media; picture-in-picture"
-        referrerPolicy="no-referrer"
-        loading="eager"
-        importance="high"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allowFullScreen
       />
-      <PlayerControls
-        title={title}
-        subtitle={subtitle}
-        state={state}
-        sources={sources}
-        showEpisodesButton={showEpisodesButton}
-        onEpisodesClick={onEpisodesClick}
-        onBack={onBack}
-        send={send}
-        onDownload={onDownload}
-        getDownloadUrl={getDownloadUrl}
+      {/* Transparent click-blocking layer.
+          Sits above the iframe so clicks are captured here instead of
+          reaching the ad overlays inside the embed. */}
+      <div
+        className="absolute inset-0 z-10 cursor-default"
+        style={{ background: 'transparent' }}
+        aria-hidden="true"
       />
     </div>
   );

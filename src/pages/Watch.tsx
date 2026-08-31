@@ -1,10 +1,10 @@
 import axios from 'axios';
-import { ChevronRightIcon, ForwardIcon, TvIcon } from '@heroicons/react/24/solid';
+import { ArrowLeftIcon, ChevronRightIcon, ForwardIcon, TvIcon, XMarkIcon } from '@heroicons/react/24/solid';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Player from '../components/Player/Player';
 import { BASE_URL, Movie, TMDB_API_KEY } from '../services/api.config';
-import { getDownloadUrl as getProviderDownloadUrl } from '../services/streamingProvider';
+import { getDownloadUrl as getProviderDownloadUrl, getEmbedUrl } from '../services/streamingProvider';
 import { markStarted, getProgress, setProgress } from '../services/continueWatchingService';
 
 interface Video {
@@ -112,60 +112,84 @@ const Watch = () => {
     }
   };
 
+  const embedSrc = isTrailerMode
+    ? trailerUrl
+    : getEmbedUrl(type, movie.id, selectedSeason, selectedEpisode);
+
   const playerTitle = type === 'tv' ? `${title} S${selectedSeason} E${selectedEpisode}` : title;
-  const playerSubtitle = type === 'tv' ? `Season ${selectedSeason} · Episode ${selectedEpisode}` : undefined;
+  const downloadUrl = !isTrailerMode
+    ? getProviderDownloadUrl(type, movie.id, selectedSeason, selectedEpisode)
+    : null;
 
   return (
     <div className="fixed inset-0 z-[100] h-screen w-screen bg-black overflow-hidden select-none">
-      {isTrailerMode ? (
-        <div className="relative h-full w-full">
-          {trailerUrl ? (
-            <iframe
-              src={trailerUrl}
-              title={title}
-              className="absolute inset-0 h-full w-full border-0"
-              allow="autoplay; encrypted-media; picture-in-picture"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-black px-6 text-center text-white/50">
-              No trailer available.
-            </div>
-          )}
+      {embedSrc ? (
+        <Player src={embedSrc} title={playerTitle} className="h-full w-full" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-black px-6 text-center text-white/50">
+          No video stream available for this title.
+        </div>
+      )}
+
+      {/* Minimal floating chrome: back button + (TV) episodes/download */}
+      <div className="pointer-events-none absolute inset-0 z-20">
+        <div className="pointer-events-auto absolute left-4 top-4 flex items-center gap-2">
           <button
+            data-focusable
+            data-nav-section="watch-controls"
             onClick={() => navigate(-1)}
             aria-label="Back"
-            className="absolute left-4 top-4 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition hover:bg-white/20"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md transition hover:bg-white/20 hover:scale-105"
           >
-            ←
+            <ArrowLeftIcon className="h-5 w-5" />
           </button>
+          <div className="rounded-full bg-black/60 px-3 py-2 text-xs font-semibold text-white backdrop-blur-md">
+            {type === 'tv' ? `S${selectedSeason} E${selectedEpisode} · ${title}` : title}
+          </div>
         </div>
-      ) : (
-        <Player
-          mediaType={type}
-          id={movie.id}
-          title={playerTitle}
-          subtitle={playerSubtitle}
-          season={selectedSeason}
-          episode={selectedEpisode}
-          className="h-full w-full"
-          showEpisodesButton={type === 'tv'}
-          onEpisodesClick={() => setShowEpisodesDrawer((v) => !v)}
-          onBack={() => navigate(-1)}
-          getDownloadUrl={() => getProviderDownloadUrl(type, movie.id, selectedSeason, selectedEpisode)}
-        />
-      )}
+
+        {type === 'tv' && !isTrailerMode && (
+          <div className="pointer-events-auto absolute right-4 top-4 flex items-center gap-2">
+            <button
+              data-focusable
+              data-nav-section="watch-controls"
+              onClick={() => setShowEpisodesDrawer((v) => !v)}
+              className="flex h-10 items-center gap-2 rounded-full bg-black/60 px-3 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20"
+            >
+              <TvIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">Episodes</span>
+            </button>
+          </div>
+        )}
+
+        {downloadUrl && (
+          <a
+            data-focusable
+            data-nav-section="watch-controls"
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="pointer-events-auto absolute bottom-4 right-4 flex h-10 items-center gap-2 rounded-full bg-black/60 px-4 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20"
+          >
+            Download
+          </a>
+        )}
+      </div>
 
       {/* TV Episodes Drawer */}
       {type === 'tv' && showEpisodesDrawer && !isTrailerMode && (
-        <div
-          data-nav-section="watch-episodes"
-          className="absolute right-4 top-20 z-40 w-80 max-h-[calc(100vh-140px)] flex flex-col rounded-xl border border-white/15 bg-black/95 p-4 shadow-2xl backdrop-blur-xl"
-        >
+        <div className="absolute right-4 top-16 z-30 w-80 max-h-[calc(100vh-100px)] flex flex-col rounded-xl border border-white/15 bg-black/95 p-4 shadow-2xl backdrop-blur-xl">
           <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-3">
             <div className="flex items-center gap-2 font-bold text-white text-sm">
               <TvIcon className="h-4 w-4 text-red-500" />
-              <span>Season & Episodes</span>
+              <span>Episodes</span>
+              <button
+                onClick={() => setShowEpisodesDrawer(false)}
+                aria-label="Close episodes"
+                className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20"
+              >
+                <XMarkIcon className="h-4 w-4" />
+              </button>
             </div>
             {validSeasons.length > 0 && (
               <select
@@ -211,26 +235,19 @@ const Watch = () => {
         </div>
       )}
 
-      {/* TV "Next Episode" pill */}
-      {type === 'tv' && !isTrailerMode && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-between p-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
-          <div className="pointer-events-auto flex items-center gap-3 text-xs font-bold text-white/80">
-            <span>Season {selectedSeason}</span>
-            <ChevronRightIcon className="h-3 w-3 text-white/40" />
-            <span className="text-red-500">Episode {selectedEpisode} of {episodeCount}</span>
-          </div>
-          {hasNextEpisode && (
-            <button
-              data-focusable
-              data-nav-section="watch-controls"
-              onClick={handleNextEpisode}
-              className="pointer-events-auto flex items-center gap-2 rounded-full bg-white px-5 py-2 text-xs font-black text-black transition hover:bg-white/80 shadow-lg"
-            >
-              <ForwardIcon className="h-4 w-4" />
-              <span>Next Episode</span>
-            </button>
-          )}
-        </div>
+      {/* TV Next Episode pill */}
+      {type === 'tv' && !isTrailerMode && hasNextEpisode && (
+        <button
+          data-focusable
+          data-nav-section="watch-controls"
+          onClick={handleNextEpisode}
+          className="pointer-events-auto absolute bottom-4 left-1/2 z-20 -translate-x-1/2 flex items-center gap-2 rounded-full bg-white px-5 py-2 text-xs font-black text-black transition hover:bg-white/80 shadow-lg"
+        >
+          <ChevronRightIcon className="h-3 w-3" />
+          <span>Episode {selectedEpisode + 1 > episodeCount ? 1 : selectedEpisode + 1}</span>
+          <ForwardIcon className="h-4 w-4" />
+          <span>Next</span>
+        </button>
       )}
     </div>
   );
