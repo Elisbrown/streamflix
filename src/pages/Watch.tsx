@@ -12,7 +12,8 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Player from '../components/Player/Player';
-import { BASE_URL, Movie, TMDB_API_KEY, getMoviesApiUrl } from '../services/api.config';
+import { BASE_URL, Movie, TMDB_API_KEY } from '../services/api.config';
+import { getEmbedUrl as getMoviesApiUrl } from '../services/streamingProvider';
 import { markStarted, getProgress, setProgress } from '../services/continueWatchingService';
 
 interface Video {

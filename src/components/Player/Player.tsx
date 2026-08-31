@@ -12,8 +12,10 @@ export default function Player({ src, title, className = '' }: PlayerProps) {
         src={src}
         title={title}
         className="absolute inset-0 h-full w-full border-0"
-        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-        allowFullScreen
+        allow="autoplay; encrypted-media; picture-in-picture"
+        referrerPolicy="no-referrer"
+        loading="eager"
+        importance="high"
       />
     </div>
   );

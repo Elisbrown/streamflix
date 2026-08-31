@@ -3,7 +3,8 @@ import { XMarkIcon, PlayIcon, TvIcon, FilmIcon, PlusIcon, CheckIcon, HandThumbUp
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSpatialNav } from '../hooks/useSpatialNav';
-import { BASE_URL, Movie, TMDB_API_KEY, TvEpisode, TvSeason, getDownloadUrl } from '../services/api.config';
+import { BASE_URL, Movie, TMDB_API_KEY, TvEpisode, TvSeason } from '../services/api.config';
+import { getDownloadUrl } from '../services/streamingProvider';
 import { getImageUrl } from '../services/movieService';
 import { isInMyList, isLiked, toggleLike, toggleMyList } from '../services/myListService';
 

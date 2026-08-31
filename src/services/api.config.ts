@@ -79,30 +79,4 @@ export interface Movie {
   };
 }
 
-export const MOVIES_API_BASE_URL = 'https://moviesapi.to';
-
-export const getMoviesApiUrl = (
-  mediaType: 'movie' | 'tv',
-  id: number | string,
-  season: number = 1,
-  episode: number = 1
-): string => {
-  const themeParam = 'theme=E50914';
-  if (mediaType === 'tv') {
-    return `${MOVIES_API_BASE_URL}/tv/${id}/${season}/${episode}?${themeParam}`;
-  }
-  return `${MOVIES_API_BASE_URL}/movie/${id}?${themeParam}`;
-};
-
-export const getDownloadUrl = (
-  mediaType: 'movie' | 'tv',
-  id: number | string,
-  season: number = 1,
-  episode: number = 1
-): string => {
-  if (mediaType === 'tv') {
-    return `${MOVIES_API_BASE_URL}/tv/${id}/${season}/${episode}/download`;
-  }
-  return `${MOVIES_API_BASE_URL}/movie/${id}/download`;
-};
 
