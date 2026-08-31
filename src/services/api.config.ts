@@ -94,3 +94,15 @@ export const getMoviesApiUrl = (
   return `${MOVIES_API_BASE_URL}/movie/${id}?${themeParam}`;
 };
 
+export const getDownloadUrl = (
+  mediaType: 'movie' | 'tv',
+  id: number | string,
+  season: number = 1,
+  episode: number = 1
+): string => {
+  if (mediaType === 'tv') {
+    return `${MOVIES_API_BASE_URL}/tv/${id}/${season}/${episode}/download`;
+  }
+  return `${MOVIES_API_BASE_URL}/movie/${id}/download`;
+};
+

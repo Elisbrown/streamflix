@@ -1,9 +1,9 @@
 import axios from 'axios';
-import { XMarkIcon, PlayIcon, TvIcon, FilmIcon, PlusIcon, CheckIcon, HandThumbUpIcon } from '@heroicons/react/24/solid';
+import { XMarkIcon, PlayIcon, TvIcon, FilmIcon, PlusIcon, CheckIcon, HandThumbUpIcon, ArrowDownTrayIcon } from '@heroicons/react/24/solid';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSpatialNav } from '../hooks/useSpatialNav';
-import { BASE_URL, Movie, TMDB_API_KEY, TvEpisode, TvSeason } from '../services/api.config';
+import { BASE_URL, Movie, TMDB_API_KEY, TvEpisode, TvSeason, getDownloadUrl } from '../services/api.config';
 import { getImageUrl } from '../services/movieService';
 import { isInMyList, isLiked, toggleLike, toggleMyList } from '../services/myListService';
 
@@ -221,6 +221,17 @@ const MovieModal = ({ movie, onClose }: MovieModalProps) => {
             >
               <HandThumbUpIcon className="h-5 w-5" />
             </button>
+            <a
+              data-focusable data-nav-section="modal-actions"
+              href={getDownloadUrl(type, activeMovie.id, selectedSeason, type === 'tv' ? 1 : 1)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-6 py-3.5 font-bold text-white transition hover:bg-white/20"
+              title="Download from MoviesAPI"
+            >
+              <ArrowDownTrayIcon className="h-5 w-5" />
+              Download
+            </a>
           </div>
 
           {/* Metadata Rows: Cast, Genres, Director */}

@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import MovieRow from '../components/MovieRow';
 import MovieModal from '../components/MovieModal';
+import ContinueWatchingRow from '../components/ContinueWatchingRow';
 import { fetchTrending, getImageUrl } from '../services/movieService';
 import { Movie } from '../services/api.config';
 import { isInMyList, isLiked, toggleLike, toggleMyList } from '../services/myListService';
@@ -209,6 +210,7 @@ export default function Home() {
       )}
 
       <div className="relative z-10 -mt-5">
+        <ContinueWatchingRow />
         {rows.map(([rowTitle, endpoint]) => (
           <MovieRow key={endpoint} title={rowTitle} endpoint={endpoint} onMovieClick={setSelectedMovie} />
         ))}

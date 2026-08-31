@@ -6,11 +6,14 @@ import {
   ArrowsPointingOutIcon,
   TvIcon,
   ListBulletIcon,
+  LockClosedIcon,
+  LockOpenIcon,
 } from '@heroicons/react/24/solid';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Player from '../components/Player/Player';
 import { BASE_URL, Movie, TMDB_API_KEY, getMoviesApiUrl } from '../services/api.config';
+import { markStarted, getProgress, setProgress } from '../services/continueWatchingService';
 
 interface Video {
   key: string;
@@ -47,6 +50,7 @@ const Watch = () => {
   // UI state for full-screen player
   const [showControls, setShowControls] = useState(true);
   const [showEpisodesDrawer, setShowEpisodesDrawer] = useState(false);
+  const [locked, setLocked] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -81,13 +85,74 @@ const Watch = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Controls hide/show on mouse inactivity
+  // Prefetch the stream URL to warm DNS/connection/cache for smoother playback.
+  // Inserts a <link rel="prefetch"> and fires a no-cors fetch to prime the browser cache.
+  useEffect(() => {
+    if (!movie) return;
+    if (isTrailerMode) return;
+
+    const url = getMoviesApiUrl(type, movie.id, selectedSeason, selectedEpisode);
+    if (!url) return;
+
+    let link: HTMLLinkElement | null = document.querySelector(`link[rel="prefetch"][href="${url}"]`);
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'prefetch';
+      link.href = url;
+      link.as = 'document';
+      document.head.appendChild(link);
+    }
+
+    try {
+      fetch(url, { mode: 'no-cors', credentials: 'omit' }).catch(() => {});
+    } catch {}
+
+    return () => {
+      if (link && link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+    };
+  }, [movie, type, selectedSeason, selectedEpisode, isTrailerMode]);
+
+  // Track watch progress for the "Continue Watching" row.
+  // Third-party iframes don't expose playback time, so we approximate progress
+  // from elapsed time on this page. Progress >= 0.8 marks the title as watched.
+  useEffect(() => {
+    if (!movie || isTrailerMode) return;
+
+    markStarted(movie, type, selectedSeason, selectedEpisode);
+
+    const TICK_MS = 15_000;
+    const DELTA = 0.05;
+    const interval = setInterval(() => {
+      const current = getProgress(movie.id, type, selectedSeason, selectedEpisode);
+      setProgress(movie, type, current + DELTA, selectedSeason, selectedEpisode);
+    }, TICK_MS);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [movie, type, selectedSeason, selectedEpisode, isTrailerMode]);
+
+  // Controls hide/show on mouse inactivity (suppressed when playback is locked)
   const handleMouseMove = () => {
+    if (locked) return;
     setShowControls(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       setShowControls(false);
     }, 3500);
+  };
+
+  const handleUnlockClick = () => {
+    if (locked) {
+      setLocked(false);
+      setShowControls(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 3500);
+    }
   };
 
   const toggleFullscreen = () => {
@@ -163,7 +228,7 @@ const Watch = () => {
       {/* Top Overlay Bar */}
       <div
         className={`absolute inset-x-0 top-0 z-30 flex items-center justify-between p-6 bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${
-          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          showControls && !locked ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
         <div className="flex items-center gap-4">
@@ -208,6 +273,16 @@ const Watch = () => {
           >
             <ArrowsPointingOutIcon className="h-5 w-5" />
           </button>
+          <button
+            data-focusable data-nav-section="watch-controls"
+            onClick={() => setLocked((value) => !value)}
+            aria-label={locked ? 'Unlock controls' : 'Lock controls'}
+            className={`flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-md transition hover:scale-105 ${
+              locked ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-black/50 text-white hover:bg-white/20'
+            }`}
+          >
+            {locked ? <LockClosedIcon className="h-5 w-5" /> : <LockOpenIcon className="h-5 w-5" />}
+          </button>
         </div>
       </div>
 
@@ -215,7 +290,7 @@ const Watch = () => {
       {type === 'tv' && showEpisodesDrawer && (
         <div
           className={`absolute right-4 top-20 z-40 w-80 max-h-[calc(100vh-140px)] flex flex-col rounded-xl border border-white/15 bg-black/90 p-4 shadow-2xl backdrop-blur-xl transition-all duration-300 ${
-            showControls ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
+            showControls && !locked ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
           }`}
         >
           <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-3">
@@ -269,7 +344,7 @@ const Watch = () => {
       {type === 'tv' && (
         <div
           className={`absolute inset-x-0 bottom-0 z-30 flex items-center justify-between p-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${
-            showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            showControls && !locked ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
           <div className="flex items-center gap-3">
@@ -289,6 +364,18 @@ const Watch = () => {
             </button>
           )}
         </div>
+      )}
+
+      {/* Locked Indicator Overlay */}
+      {locked && (
+        <button
+          onClick={handleUnlockClick}
+          aria-label="Unlock controls"
+          className="absolute right-6 top-1/2 z-40 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-red-600/90 text-white shadow-2xl backdrop-blur-md transition hover:bg-red-700 hover:scale-110"
+          title="Tap to unlock controls"
+        >
+          <LockClosedIcon className="h-6 w-6" />
+        </button>
       )}
     </div>
   );
