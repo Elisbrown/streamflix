@@ -1,19 +1,10 @@
 import axios from 'axios';
-import {
-  ArrowLeftIcon,
-  ChevronRightIcon,
-  ForwardIcon,
-  ArrowsPointingOutIcon,
-  TvIcon,
-  ListBulletIcon,
-  LockClosedIcon,
-  LockOpenIcon,
-} from '@heroicons/react/24/solid';
-import { useEffect, useRef, useState } from 'react';
+import { ChevronRightIcon, ForwardIcon, TvIcon } from '@heroicons/react/24/solid';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Player from '../components/Player/Player';
 import { BASE_URL, Movie, TMDB_API_KEY } from '../services/api.config';
-import { getEmbedUrl as getMoviesApiUrl } from '../services/streamingProvider';
+import { getDownloadUrl as getProviderDownloadUrl } from '../services/streamingProvider';
 import { markStarted, getProgress, setProgress } from '../services/continueWatchingService';
 
 interface Video {
@@ -39,21 +30,15 @@ const Watch = () => {
   const [selectedSeason, setSelectedSeason] = useState(querySeason);
   const [selectedEpisode, setSelectedEpisode] = useState(queryEpisode);
   const [error, setError] = useState('');
+  const [showEpisodesDrawer, setShowEpisodesDrawer] = useState(false);
 
-  // Update season/episode state when URL query params change
   useEffect(() => {
     const s = Number(searchParams.get('season'));
     const e = Number(searchParams.get('episode'));
     if (s && !isNaN(s)) setSelectedSeason(s);
-    if (e && !isNaN(e)) setSelectedEpisode(e);
+    if (e && !isNaN(e) && e !== selectedEpisode) setSelectedEpisode(e);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
-
-  // UI state for full-screen player
-  const [showControls, setShowControls] = useState(true);
-  const [showEpisodesDrawer, setShowEpisodesDrawer] = useState(false);
-  const [locked, setLocked] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const numericId = Number(id);
@@ -76,93 +61,17 @@ const Watch = () => {
       .catch((err) => setError(err instanceof Error ? err.message : 'Unable to load this title.'));
   }, [id, type]);
 
-  // Attempt automatic browser fullscreen when component mounts
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      containerRef.current?.requestFullscreen?.().catch(() => {
-        // Silently catch browser policy rejection if un-gestured
-      });
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Prefetch the stream URL to warm DNS/connection/cache for smoother playback.
-  // Inserts a <link rel="prefetch"> and fires a no-cors fetch to prime the browser cache.
-  useEffect(() => {
-    if (!movie) return;
-    if (isTrailerMode) return;
-
-    const url = getMoviesApiUrl(type, movie.id, selectedSeason, selectedEpisode);
-    if (!url) return;
-
-    let link: HTMLLinkElement | null = document.querySelector(`link[rel="prefetch"][href="${url}"]`);
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'prefetch';
-      link.href = url;
-      link.as = 'document';
-      document.head.appendChild(link);
-    }
-
-    try {
-      fetch(url, { mode: 'no-cors', credentials: 'omit' }).catch(() => {});
-    } catch {}
-
-    return () => {
-      if (link && link.parentNode) {
-        link.parentNode.removeChild(link);
-      }
-    };
-  }, [movie, type, selectedSeason, selectedEpisode, isTrailerMode]);
-
-  // Track watch progress for the "Continue Watching" row.
-  // Third-party iframes don't expose playback time, so we approximate progress
-  // from elapsed time on this page. Progress >= 0.8 marks the title as watched.
   useEffect(() => {
     if (!movie || isTrailerMode) return;
-
     markStarted(movie, type, selectedSeason, selectedEpisode);
-
     const TICK_MS = 15_000;
     const DELTA = 0.05;
     const interval = setInterval(() => {
       const current = getProgress(movie.id, type, selectedSeason, selectedEpisode);
       setProgress(movie, type, current + DELTA, selectedSeason, selectedEpisode);
     }, TICK_MS);
-
-    return () => {
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [movie, type, selectedSeason, selectedEpisode, isTrailerMode]);
-
-  // Controls hide/show on mouse inactivity (suppressed when playback is locked)
-  const handleMouseMove = () => {
-    if (locked) return;
-    setShowControls(true);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      setShowControls(false);
-    }, 3500);
-  };
-
-  const handleUnlockClick = () => {
-    if (locked) {
-      setLocked(false);
-      setShowControls(true);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => {
-        setShowControls(false);
-      }, 3500);
-    }
-  };
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen?.().catch(() => {});
-    } else {
-      document.exitFullscreen?.().catch(() => {});
-    }
-  };
 
   if (error) {
     return (
@@ -203,96 +112,55 @@ const Watch = () => {
     }
   };
 
-  const activeStreamUrl = isTrailerMode
-    ? trailerUrl
-    : getMoviesApiUrl(type, movie.id, selectedSeason, selectedEpisode);
+  const playerTitle = type === 'tv' ? `${title} S${selectedSeason} E${selectedEpisode}` : title;
+  const playerSubtitle = type === 'tv' ? `Season ${selectedSeason} · Episode ${selectedEpisode}` : undefined;
 
   return (
-    <div
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      className="fixed inset-0 z-[100] h-screen w-screen bg-black overflow-hidden select-none"
-    >
-      {/* Fullscreen Video Player */}
-      {activeStreamUrl ? (
-        <Player
-          src={activeStreamUrl}
-          title={`${title} ${type === 'tv' ? `S${selectedSeason} E${selectedEpisode}` : ''}`}
-          className="h-full w-full"
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-black px-6 text-center text-white/50">
-          No video stream available for this title.
-        </div>
-      )}
-
-      {/* Top Overlay Bar */}
-      <div
-        className={`absolute inset-x-0 top-0 z-30 flex items-center justify-between p-6 bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${
-          showControls && !locked ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-      >
-        <div className="flex items-center gap-4">
-          <button
-            data-focusable data-nav-section="watch-controls"
-            onClick={() => navigate(-1)}
-            aria-label="Back"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition hover:bg-white/20 hover:scale-105"
-          >
-            <ArrowLeftIcon className="h-6 w-6" />
-          </button>
-          <div>
-            <h1 className="text-lg font-bold text-white md:text-xl drop-shadow">{title}</h1>
-            {type === 'tv' && (
-              <p className="text-xs font-semibold text-white/70">
-                Season {selectedSeason}: Episode {selectedEpisode}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {type === 'tv' && (
-            <button
-              data-focusable data-nav-section="watch-controls"
-              onClick={() => setShowEpisodesDrawer((prev) => !prev)}
-              className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold transition backdrop-blur-md ${
-                showEpisodesDrawer
-                  ? 'bg-red-600 text-white'
-                  : 'bg-black/60 text-white/80 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <ListBulletIcon className="h-4 w-4" />
-              <span>Episodes</span>
-            </button>
+    <div className="fixed inset-0 z-[100] h-screen w-screen bg-black overflow-hidden select-none">
+      {isTrailerMode ? (
+        <div className="relative h-full w-full">
+          {trailerUrl ? (
+            <iframe
+              src={trailerUrl}
+              title={title}
+              className="absolute inset-0 h-full w-full border-0"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-black px-6 text-center text-white/50">
+              No trailer available.
+            </div>
           )}
           <button
-            data-focusable data-nav-section="watch-controls"
-            onClick={toggleFullscreen}
-            aria-label="Toggle Fullscreen"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition hover:bg-white/20 hover:scale-105"
+            onClick={() => navigate(-1)}
+            aria-label="Back"
+            className="absolute left-4 top-4 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition hover:bg-white/20"
           >
-            <ArrowsPointingOutIcon className="h-5 w-5" />
-          </button>
-          <button
-            data-focusable data-nav-section="watch-controls"
-            onClick={() => setLocked((value) => !value)}
-            aria-label={locked ? 'Unlock controls' : 'Lock controls'}
-            className={`flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-md transition hover:scale-105 ${
-              locked ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-black/50 text-white hover:bg-white/20'
-            }`}
-          >
-            {locked ? <LockClosedIcon className="h-5 w-5" /> : <LockOpenIcon className="h-5 w-5" />}
+            ←
           </button>
         </div>
-      </div>
+      ) : (
+        <Player
+          mediaType={type}
+          id={movie.id}
+          title={playerTitle}
+          subtitle={playerSubtitle}
+          season={selectedSeason}
+          episode={selectedEpisode}
+          className="h-full w-full"
+          showEpisodesButton={type === 'tv'}
+          onEpisodesClick={() => setShowEpisodesDrawer((v) => !v)}
+          onBack={() => navigate(-1)}
+          getDownloadUrl={() => getProviderDownloadUrl(type, movie.id, selectedSeason, selectedEpisode)}
+        />
+      )}
 
-      {/* TV Episodes Drawer Overlay (If opened) */}
-      {type === 'tv' && showEpisodesDrawer && (
+      {/* TV Episodes Drawer */}
+      {type === 'tv' && showEpisodesDrawer && !isTrailerMode && (
         <div
-          className={`absolute right-4 top-20 z-40 w-80 max-h-[calc(100vh-140px)] flex flex-col rounded-xl border border-white/15 bg-black/90 p-4 shadow-2xl backdrop-blur-xl transition-all duration-300 ${
-            showControls && !locked ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
-          }`}
+          data-nav-section="watch-episodes"
+          className="absolute right-4 top-20 z-40 w-80 max-h-[calc(100vh-140px)] flex flex-col rounded-xl border border-white/15 bg-black/95 p-4 shadow-2xl backdrop-blur-xl"
         >
           <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-3">
             <div className="flex items-center gap-2 font-bold text-white text-sm">
@@ -301,7 +169,8 @@ const Watch = () => {
             </div>
             {validSeasons.length > 0 && (
               <select
-                data-focusable data-nav-section="watch-episodes"
+                data-focusable
+                data-nav-section="watch-episodes"
                 value={selectedSeason}
                 onChange={(e) => {
                   setSelectedSeason(Number(e.target.value));
@@ -321,7 +190,8 @@ const Watch = () => {
           <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1.5 scrollbar-thin">
             {Array.from({ length: episodeCount }, (_, i) => i + 1).map((epNum) => (
               <button
-                data-focusable data-nav-section="watch-episodes"
+                data-focusable
+                data-nav-section="watch-episodes"
                 key={epNum}
                 onClick={() => {
                   setSelectedEpisode(epNum);
@@ -341,24 +211,20 @@ const Watch = () => {
         </div>
       )}
 
-      {/* Bottom Floating Control Bar for TV Shows */}
-      {type === 'tv' && (
-        <div
-          className={`absolute inset-x-0 bottom-0 z-30 flex items-center justify-between p-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-300 ${
-            showControls && !locked ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-white/80">Season {selectedSeason}</span>
+      {/* TV "Next Episode" pill */}
+      {type === 'tv' && !isTrailerMode && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-between p-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+          <div className="pointer-events-auto flex items-center gap-3 text-xs font-bold text-white/80">
+            <span>Season {selectedSeason}</span>
             <ChevronRightIcon className="h-3 w-3 text-white/40" />
-            <span className="text-xs font-bold text-red-500">Episode {selectedEpisode} of {episodeCount}</span>
+            <span className="text-red-500">Episode {selectedEpisode} of {episodeCount}</span>
           </div>
-
           {hasNextEpisode && (
             <button
-              data-focusable data-nav-section="watch-controls"
+              data-focusable
+              data-nav-section="watch-controls"
               onClick={handleNextEpisode}
-              className="flex items-center gap-2 rounded-full bg-white px-5 py-2 text-xs font-black text-black transition hover:bg-white/80 shadow-lg"
+              className="pointer-events-auto flex items-center gap-2 rounded-full bg-white px-5 py-2 text-xs font-black text-black transition hover:bg-white/80 shadow-lg"
             >
               <ForwardIcon className="h-4 w-4" />
               <span>Next Episode</span>
@@ -366,22 +232,8 @@ const Watch = () => {
           )}
         </div>
       )}
-
-      {/* Locked Indicator Overlay */}
-      {locked && (
-        <button
-          onClick={handleUnlockClick}
-          aria-label="Unlock controls"
-          className="absolute right-6 top-1/2 z-40 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-red-600/90 text-white shadow-2xl backdrop-blur-md transition hover:bg-red-700 hover:scale-110"
-          title="Tap to unlock controls"
-        >
-          <LockClosedIcon className="h-6 w-6" />
-        </button>
-      )}
     </div>
   );
 };
 
 export default Watch;
-
-

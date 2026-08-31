@@ -55,3 +55,24 @@ export function getDownloadUrl(
 export function getStreamHost(): string {
   return PROVIDER_BASE_URL;
 }
+
+/**
+ * Returns the URL of our own serverless proxy that fetches the embed page
+ * and extracts the underlying media sources. The client calls this instead
+ * of the provider directly so the provider host is never exposed and we
+ * can observe the media.
+ */
+export function getProxyStreamUrl(
+  mediaType: 'movie' | 'tv',
+  id: number | string,
+  season: number = 1,
+  episode: number = 1
+): string {
+  const params = new URLSearchParams({
+    type: mediaType,
+    id: String(id),
+    season: String(season),
+    episode: String(episode),
+  });
+  return `/api/stream?${params.toString()}`;
+}
