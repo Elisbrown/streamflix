@@ -1,6 +1,14 @@
 import axios from 'axios';
-import { ArrowLeftIcon, ChevronRightIcon, ForwardIcon, TvIcon, XMarkIcon } from '@heroicons/react/24/solid';
-import { useEffect, useState } from 'react';
+import {
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  ForwardIcon,
+  TvIcon,
+  XMarkIcon,
+  PlayIcon,
+  PauseIcon,
+} from '@heroicons/react/24/solid';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Player from '../components/Player/Player';
 import { BASE_URL, Movie, TMDB_API_KEY } from '../services/api.config';
@@ -30,6 +38,7 @@ const Watch = () => {
   const [selectedSeason, setSelectedSeason] = useState(querySeason);
   const [selectedEpisode, setSelectedEpisode] = useState(queryEpisode);
   const [error, setError] = useState('');
+  const [isPlaying, setIsPlaying] = useState(true);
   const [showEpisodesDrawer, setShowEpisodesDrawer] = useState(false);
 
   useEffect(() => {
@@ -116,6 +125,18 @@ const Watch = () => {
     ? trailerUrl
     : getEmbedUrl(type, movie.id, selectedSeason, selectedEpisode);
 
+  const togglePlay = useCallback(() => {
+    const iframe = document.querySelector('iframe[data-player="streamflix"]') as HTMLIFrameElement | null;
+    if (!iframe || !iframe.contentWindow) return;
+    const cmd = { cmd: isPlaying ? 'pause' : 'play', type: 'streamflix-command' };
+    try {
+      iframe.contentWindow.postMessage(cmd, '*');
+      iframe.contentWindow.postMessage({ event: isPlaying ? 'pause' : 'play' }, '*');
+      iframe.contentWindow.postMessage({ method: isPlaying ? 'pause' : 'play' }, '*');
+    } catch {}
+    setIsPlaying((prev) => !prev);
+  }, [isPlaying]);
+
   const playerTitle = type === 'tv' ? `${title} S${selectedSeason} E${selectedEpisode}` : title;
   const downloadUrl = !isTrailerMode
     ? getProviderDownloadUrl(type, movie.id, selectedSeason, selectedEpisode)
@@ -160,6 +181,19 @@ const Watch = () => {
               <span className="hidden sm:inline">Episodes</span>
             </button>
           </div>
+        )}
+
+        {/* Play / Pause button — uses postMessage to control the provider player */}
+        {!isTrailerMode && (
+          <button
+            data-focusable
+            data-nav-section="watch-controls"
+            onClick={togglePlay}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            className="pointer-events-auto absolute bottom-4 left-1/2 z-20 -translate-x-1/2 flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-2xl backdrop-blur-md transition hover:scale-105 hover:bg-red-700"
+          >
+            {isPlaying ? <PauseIcon className="h-6 w-6" /> : <PlayIcon className="h-6 w-6 ml-0.5" />}
+          </button>
         )}
 
         {downloadUrl && (
