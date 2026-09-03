@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+
 interface PlayerProps {
   src: string;
   title: string;
@@ -7,13 +9,40 @@ interface PlayerProps {
 /**
  * Simple embed player.
  *
- * No `sandbox` attribute is used — the provider refuses to load inside a
- * sandboxed frame. The `csp` attribute was removed after testing showed it
- * prevented the provider player from initializing fully (most movies and
- * series stayed dark / would not load). Popup / redirect blocking is
- * handled by the overlay layer only.
+ * The overlay starts with pointer-events: none so the user can interact
+ * with the provider's native play button. Once the provider sends a
+ * postMessage event (`ready` / `play`), the overlay activates and blocks
+ * clicks to prevent ad redirects. If no event arrives (e.g. autoplay
+ * already working), a timeout activates the shield after 5s so ads are
+ * still blocked during playback.
  */
 export default function Player({ src, title, className = '' }: PlayerProps) {
+  const [overlayActive, setOverlayActive] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const d = (e.data || {}) as Record<string, unknown>;
+      const cmd = d.event || d.cmd || d.method || d.type;
+        if (typeof cmd === 'string' && ['ready', 'play', 'playing'].includes(cmd.toLowerCase())) {
+          setOverlayActive(true);
+        }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setOverlayActive(true);
+    }, 5000);
+    timerRef.current = timer;
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
   return (
     <div className={`relative h-full w-full overflow-hidden bg-black ${className}`}>
       <iframe
@@ -25,15 +54,19 @@ export default function Player({ src, title, className = '' }: PlayerProps) {
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
         allowFullScreen
       />
-      {/* Click-shield: blocks clicks on the video surface so the ad
-          overlay inside the embed cannot trigger a popup/redirect. */}
+      {/* Click-shield activates once playback starts (postMessage) or after 5s. */}
       <div
-        className="absolute inset-0 z-10"
+        ref={overlayRef}
+        className={`absolute inset-0 z-10 transition-opacity duration-300 ${
+          overlayActive ? 'pointer-events-auto' : 'pointer-events-none opacity-0'
+        }`}
         style={{ background: 'transparent' }}
         aria-hidden="true"
         onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
+          if (overlayActive) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
         }}
       />
     </div>
